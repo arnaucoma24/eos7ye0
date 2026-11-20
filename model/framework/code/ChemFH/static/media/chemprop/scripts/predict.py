@@ -133,18 +133,22 @@ def chemfh_pred(
         "--checkpoint_path", os.path.join(MODEL_PATH, "model.pt"),
         "--num_workers", "0",
         "--no_cuda",
+        "--uncertainty_method", "dropout"
     ]
     arguments += feature_cmd
     # print(arguments)
 
-    # Ersilia: standard (deterministic) Chemprop prediction. The ChemFH web server
-    # used Monte Carlo dropout ("--uncertainty_method dropout": the mean of 10
-    # unseeded passes with dropout on) to report an uncertainty per endpoint.
-    # Ersilia does not output those uncertainties, and the unseeded passes made
-    # the probabilities change from run to run.
     args = chemprop.args.PredictArgs().parse_args(arguments)
-    preds = chemprop.train.make_predictions(args=args)
-    uncertainty = np.full((len(preds), len(chemfh_uncolname)), np.nan)
+    # Ersilia: keep the authors' Monte Carlo dropout (mean of 10 passes with
+    # dropout on), but seed each molecule's dropout masks so a molecule's
+    # probability no longer changes from run to run or with the rest of the
+    # input. See seeded_dropout.py.
+    from .seeded_dropout import install as _install_seeded_dropout
+    _install_seeded_dropout()
+    preds, uncertainty = chemprop.train.make_predictions(
+        args=args,
+        return_uncertainty=True,
+    )
 
     sub_df = pd.DataFrame(
         preds,
